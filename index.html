@@ -595,7 +595,7 @@ function renderLogin(){
     </label>
     ${state.loginError ? `<div class="error-msg">${escapeHtml(state.loginError)}</div>` : ''}
     <button class="btn btn-gold" style="width:100%;padding:13px;" id="loginBtn">Wejdź</button>
-    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + liczba osób na posiłki</div>
+    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + komunikaty zakupy</div>
     </div>
   </div>`;
 }
@@ -884,7 +884,7 @@ function attachEvents(){
       showToast(already ? 'Wypisano.' : 'Zapisano — dziękujemy!');
       if(!already){
         if(key==='room') state.notice = 'Super, skontaktuj się z koordynatorem kursu.';
-        else if(key.startsWith('meal_')) state.notice = 'Super, skontaktuj się z koordynatorem posiłków tego dnia.';
+        else if(key==='shopping' || key.startsWith('meal_')) state.notice = 'Super, skontaktuj się z koordynatorem posiłków tego dnia.';
         if(state.notice) render();
       }
     });
