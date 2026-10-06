@@ -380,7 +380,8 @@ const db = getFirestore(fbApp);
 /* ============================================================
    KONFIGURACJA — edytuj poniższe wartości
    ============================================================ */
-const ADMIN_NAMES = ['Bartek108', 'Marcin108', 'Arleta108'];   // imiona trzech administratorów (bez rozróżniania wielkości liter)
+// Administratorem zostaje każdy, kto wpisze imię zakończone cyframi 108 (np. Ania108)
+const ADMIN_SUFFIX = '108';
 const APP_PASSWORD = 'sangha2026';                // wspólne hasło wejściowe — zmień je!
 
 /* ============================================================
@@ -484,7 +485,7 @@ function attemptLogin(name, password, remember){
   if(password !== APP_PASSWORD){ state.loginError = 'Błędne hasło.'; render(); return; }
   state.loggedIn = true;
   state.name = name.trim();
-  state.isAdmin = ADMIN_NAMES.some(a => norm(a) === norm(state.name));
+  state.isAdmin = norm(state.name).length > ADMIN_SUFFIX.length && norm(state.name).endsWith(ADMIN_SUFFIX);
   state.loginError = '';
   if(remember){ saveLogin(state.name, password); } else { clearSavedLogin(); }
   render();
