@@ -279,6 +279,8 @@ input,textarea,select{font-family:inherit;}
   padding-left:8px;font-size:0.78rem;white-space:nowrap;
 }
 .meal-table th:first-child, .meal-table td:first-child{width:74px;}
+.meal-coord-row th, .meal-coord-row td{background:#FBF6EA;}
+.meal-coord-row th{color:#7A5A20;}
 .meal-cell{display:flex;flex-direction:column;align-items:center;gap:4px;min-height:34px;justify-content:center;}
 .meal-cell-count{font-size:0.66rem;color:var(--ink-soft);}
 .meal-cell-names{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;}
@@ -420,6 +422,8 @@ function norm(s){ return (s||'').trim().toLowerCase(); }
 
 function emptyVolunteer(){
   const v = {};
+  v.coord_course = { needed: 1, people: [] };
+  MEAL_DAYS.forEach(day => { v[`coord_meals_${day.key}`] = { needed: 1, people: [] }; });
   ORG_CATS.forEach(c => v[c.key] = { needed: 2, people: [] });
   MEAL_DAYS.forEach(day=>{
     MEAL_TYPES.forEach(meal=>{
@@ -439,9 +443,13 @@ async function loadAll(){
     // zabezpieczenie dla kursów zapisanych przed zmianami w strukturze
     state.courses.forEach(course => {
       if(course.aktualnosci === undefined) course.aktualnosci = '';
-      if(course.coordinatorAll === undefined) course.coordinatorAll = '';
       if(course.coordinatorMeals === undefined) course.coordinatorMeals = '';
       course.volunteerSlots = Object.assign(emptyVolunteer(), course.volunteerSlots || {});
+      // dawny wpis tekstowy "koordynator kursu" -> zapis w nowym polu zgłoszeń
+      if(course.coordinatorAll && course.volunteerSlots.coord_course.people.length === 0){
+        course.volunteerSlots.coord_course.people.push(course.coordinatorAll);
+      }
+      course.coordinatorAll = '';
     });
   }catch(e){ state.courses = []; showToast('Nie udało się wczytać danych z bazy.'); }
   state.loading = false;
@@ -578,7 +586,7 @@ function renderLogin(){
     </label>
     ${state.loginError ? `<div class="error-msg">${escapeHtml(state.loginError)}</div>` : ''}
     <button class="btn btn-gold" style="width:100%;padding:13px;" id="loginBtn">Wejdź</button>
-    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin</div>
+    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + koordynatorzy</div>
     </div>
   </div>`;
 }
@@ -661,12 +669,12 @@ function renderCourseDetail(){
   if(course.program){
     html += `<div class="detail-block"><h4>Program kursu</h4><p>${escapeHtml(course.program)}</p></div>`;
   }
-  if(course.coordinatorAll || course.coordinatorMeals){
-    html += `<div class="detail-block"><h4>Koordynatorzy</h4>
-      ${course.coordinatorAll ? `<p><strong>Cały kurs:</strong> ${escapeHtml(course.coordinatorAll)}</p>` : ''}
-      ${course.coordinatorMeals ? `<p style="margin-top:${course.coordinatorAll?'6px':'0'};"><strong>Posiłki:</strong> ${escapeHtml(course.coordinatorMeals)}</p>` : ''}
-    </div>`;
+  html += `<div class="detail-block"><h4>Koordynator kursu</h4>`;
+  html += renderVolCategory('coord_course', 'Koordynator całego kursu', course.volunteerSlots.coord_course);
+  if(course.coordinatorMeals){
+    html += `<p style="margin-top:8px;"><strong>Koordynator posiłków (wcześniejszy wpis):</strong> ${escapeHtml(course.coordinatorMeals)}</p>`;
   }
+  html += `</div>`;
 
   html += `<div class="detail-block"><h4>Zadania organizacyjne</h4>`;
   ORG_CATS.forEach(cat=>{
@@ -715,10 +723,12 @@ function renderVolCategory(key, label, v){
 /* ---------- Tabela posiłków (dni x posiłki) ---------- */
 function renderMealTable(course){
   let html = `<table class="meal-table"><thead><tr><th></th>${MEAL_DAYS.map(d=>`<th>${d.label}</th>`).join('')}</tr></thead><tbody>`;
-  MEAL_TYPES.forEach(meal=>{
-    html += `<tr><th>${meal.label}</th>`;
+  const rows = [{ label:'Koordynator', keyFor: day => `coord_meals_${day.key}`, coord:true }]
+    .concat(MEAL_TYPES.map(meal => ({ label: meal.label, keyFor: day => `meal_${day.key}_${meal.key}` })));
+  rows.forEach(row=>{
+    html += `<tr class="${row.coord ? 'meal-coord-row' : ''}"><th>${row.label}</th>`;
     MEAL_DAYS.forEach(day=>{
-      const key = `meal_${day.key}_${meal.key}`;
+      const key = row.keyFor(day);
       const v = course.volunteerSlots[key];
       const already = v.people.some(p=>norm(p)===norm(state.name));
       const full = v.people.length >= v.needed;
@@ -760,8 +770,9 @@ function renderModal(){
 
         <div class="field"><label>Program kursu</label><textarea id="f_program" rows="4">${escapeHtml(c.program)}</textarea></div>
 
-        <div class="field"><label>Koordynator całego kursu — imię i nazwisko</label><input id="f_coordAll" value="${escapeHtml(c.coordinatorAll||'')}"></div>
-        <div class="field"><label>Koordynator posiłków — imię i nazwisko</label><input id="f_coordMeals" value="${escapeHtml(c.coordinatorMeals||'')}"></div>
+        <div class="field-row">
+          <div class="field"><label>Koordynator kursu — ile osób (1–2)</label><input type="number" min="1" max="2" id="f_need_coord_course" value="${c.volunteerSlots.coord_course.needed}"></div>
+        </div>
 
         <div class="field-row">
           <div class="field"><label>Pokój dla nauczyciela — ile osób (1–2)</label><input type="number" min="1" max="2" id="f_need_room" value="${c.volunteerSlots.room.needed}"></div>
@@ -770,7 +781,7 @@ function renderModal(){
 
         <div class="field">
           <label>Przygotowanie posiłków</label>
-          <p class="course-meta" style="line-height:1.5;">Automatycznie tworzone są zapisy po 2 osoby na śniadanie, obiad i kolację — na piątek, sobotę i niedzielę. Pojawią się w widoku kursu zaraz po zapisaniu.</p>
+          <p class="course-meta" style="line-height:1.5;">Automatycznie tworzone są zapisy: po 2 osoby na śniadanie, obiad i kolację oraz 1 koordynator posiłków — na piątek, sobotę i niedzielę. Pojawią się w widoku kursu zaraz po zapisaniu.</p>
         </div>
 
         <div class="modal-actions">
@@ -802,7 +813,7 @@ function attachEvents(){
 
   const fabAdd = document.getElementById('fabAdd');
   if(fabAdd) fabAdd.addEventListener('click', ()=>{
-    state.editingCourse = { id:uid(), title:'', dateStart:'', dateEnd:'', aktualnosci:'', program:'', coordinatorAll:'', coordinatorMeals:'', volunteerSlots: emptyVolunteer() };
+    state.editingCourse = { id:uid(), title:'', dateStart:'', dateEnd:'', aktualnosci:'', program:'', coordinatorMeals:'', volunteerSlots: emptyVolunteer() };
     state.modal = 'addCourse';
     render();
   });
@@ -887,8 +898,8 @@ function collectCourseFormIntoState(){
   c.dateEnd = document.getElementById('f_dateEnd').value;
   c.aktualnosci = document.getElementById('f_aktualnosci').value;
   c.program = document.getElementById('f_program').value;
-  c.coordinatorAll = document.getElementById('f_coordAll').value;
-  c.coordinatorMeals = document.getElementById('f_coordMeals').value;
+  const coordEl = document.getElementById('f_need_coord_course');
+  if(coordEl) c.volunteerSlots.coord_course.needed = Math.min(2, Math.max(1, parseInt(coordEl.value,10) || 1));
   const roomEl = document.getElementById('f_need_room');
   if(roomEl) c.volunteerSlots.room.needed = Math.min(2, Math.max(1, parseInt(roomEl.value,10) || 1));
   const shopEl = document.getElementById('f_need_shopping');
