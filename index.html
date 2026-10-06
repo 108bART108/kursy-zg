@@ -213,6 +213,12 @@ input,textarea,select{font-family:inherit;}
 .date-badge .d{font-family:'Fraunces',serif;font-size:1.25rem;font-weight:600;line-height:1;}
 .date-badge .m{font-size:0.65rem;text-transform:uppercase;letter-spacing:.05em;opacity:.85;}
 .course-card h3{font-size:1.05rem;margin:0 0 3px;}
+.teacher-thumb{width:52px;height:52px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--gold);background:#eee;}
+.detail-head-row{display:flex;align-items:center;gap:14px;}
+.detail-head-row>div{flex:1;min-width:0;}
+.teacher-photo-lg{width:84px;height:84px;border-radius:50%;object-fit:cover;flex-shrink:0;border:3px solid var(--gold);}
+.photo-edit{display:flex;align-items:center;gap:12px;}
+.photo-edit .btn-mini{font-size:.8rem;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:pointer;}
 .course-meta{font-size:0.82rem;color:var(--ink-soft);margin:0;}
 .course-card-foot{
   margin-top:14px;padding-top:12px;border-top:1px solid var(--line);
@@ -443,6 +449,7 @@ async function loadAll(){
     // zabezpieczenie dla kursów zapisanych przed zmianami w strukturze
     state.courses.forEach(course => {
       if(course.aktualnosci === undefined) course.aktualnosci = '';
+      if(course.teacherPhoto === undefined) course.teacherPhoto = '';
       if(course.coordinatorMeals === undefined) course.coordinatorMeals = '';
       course.volunteerSlots = Object.assign(emptyVolunteer(), course.volunteerSlots || {});
       // dawny wpis tekstowy "koordynator kursu" -> zapis w nowym polu zgłoszeń
@@ -586,7 +593,7 @@ function renderLogin(){
     </label>
     ${state.loginError ? `<div class="error-msg">${escapeHtml(state.loginError)}</div>` : ''}
     <button class="btn btn-gold" style="width:100%;padding:13px;" id="loginBtn">Wejdź</button>
-    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + koordynatorzy (osobno)</div>
+    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + zdjęcie nauczyciela</div>
     </div>
   </div>`;
 }
@@ -633,6 +640,7 @@ function renderCourseList(){
     <div class="course-card" data-course="${course.id}">
       <div class="course-card-top">
         <div class="date-badge"><div class="d">${b.d}</div><div class="m">${b.m}</div></div>
+        ${course.teacherPhoto ? `<img class="teacher-thumb" src="${course.teacherPhoto}" alt="Nauczyciel">` : ''}
         <div style="flex:1;">
           <h3>${escapeHtml(course.title)}</h3>
           <p class="course-meta">${course.aktualnosci ? '📌 ' + escapeHtml(course.aktualnosci) : ''}</p>
@@ -654,9 +662,14 @@ function renderCourseDetail(){
 
   let html = `<button class="detail-back" id="backBtn">‹ Wszystkie kursy</button>`;
   html += `<div class="detail-header">
-    <h2>${escapeHtml(course.title)}</h2>
-    <div class="detail-meta-row">
-      <span>📅 ${fmtLong(course.dateStart)}${course.dateEnd && course.dateEnd!==course.dateStart ? ' – ' + fmtLong(course.dateEnd) : ''}</span>
+    <div class="detail-head-row">
+      <div>
+        <h2>${escapeHtml(course.title)}</h2>
+        <div class="detail-meta-row">
+          <span>📅 ${fmtLong(course.dateStart)}${course.dateEnd && course.dateEnd!==course.dateStart ? ' – ' + fmtLong(course.dateEnd) : ''}</span>
+        </div>
+      </div>
+      ${course.teacherPhoto ? `<img class="teacher-photo-lg" src="${course.teacherPhoto}" alt="Nauczyciel">` : ''}
     </div>
   </div>`;
 
@@ -771,6 +784,14 @@ function renderModal(){
           <div class="field"><label>Data końca</label><input id="f_dateEnd" type="date" value="${c.dateEnd}"></div>
         </div>
 
+        <div class="field"><label>Zdjęcie nauczyciela</label>
+          <div class="photo-edit">
+            ${c.teacherPhoto ? `<img class="teacher-thumb" src="${c.teacherPhoto}" alt="">` : ''}
+            <input type="file" id="f_photo" accept="image/*" style="flex:1;min-width:0;">
+            ${c.teacherPhoto ? `<button type="button" class="btn-mini" id="f_photo_remove">Usuń</button>` : ''}
+          </div>
+        </div>
+
         <div class="field"><label>Aktualności — jeśli będą jakieś zmiany</label><textarea id="f_aktualnosci" rows="3">${escapeHtml(c.aktualnosci||'')}</textarea></div>
 
         <div class="field"><label>Program kursu</label><textarea id="f_program" rows="4">${escapeHtml(c.program)}</textarea></div>
@@ -818,7 +839,7 @@ function attachEvents(){
 
   const fabAdd = document.getElementById('fabAdd');
   if(fabAdd) fabAdd.addEventListener('click', ()=>{
-    state.editingCourse = { id:uid(), title:'', dateStart:'', dateEnd:'', aktualnosci:'', program:'', coordinatorMeals:'', volunteerSlots: emptyVolunteer() };
+    state.editingCourse = { id:uid(), title:'', dateStart:'', dateEnd:'', aktualnosci:'', teacherPhoto:'', program:'', coordinatorMeals:'', volunteerSlots: emptyVolunteer() };
     state.modal = 'addCourse';
     render();
   });
@@ -878,6 +899,35 @@ function attachEvents(){
   }
   const cancelBtn = document.getElementById('modalCancel');
   if(cancelBtn) cancelBtn.addEventListener('click', ()=>{ state.modal=null; render(); });
+
+  const photoInput = document.getElementById('f_photo');
+  if(photoInput) photoInput.addEventListener('change', ()=>{
+    const file = photoInput.files && photoInput.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      const img = new Image();
+      img.onload = ()=>{
+        const S = 300;
+        const side = Math.min(img.width, img.height);
+        const cv = document.createElement('canvas');
+        cv.width = S; cv.height = S;
+        cv.getContext('2d').drawImage(img, (img.width-side)/2, (img.height-side)/2, side, side, 0, 0, S, S);
+        collectCourseFormIntoState();
+        state.editingCourse.teacherPhoto = cv.toDataURL('image/jpeg', 0.75);
+        render();
+      };
+      img.onerror = ()=> showToast('Nie udało się wczytać zdjęcia.');
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+  const photoRemove = document.getElementById('f_photo_remove');
+  if(photoRemove) photoRemove.addEventListener('click', ()=>{
+    collectCourseFormIntoState();
+    state.editingCourse.teacherPhoto = '';
+    render();
+  });
 
   const saveCourseBtn = document.getElementById('modalSaveCourse');
   if(saveCourseBtn) saveCourseBtn.addEventListener('click', async ()=>{
