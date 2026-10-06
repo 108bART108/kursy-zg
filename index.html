@@ -214,6 +214,8 @@ input,textarea,select{font-family:inherit;}
 .date-badge .m{font-size:0.65rem;text-transform:uppercase;letter-spacing:.05em;opacity:.85;}
 .course-card h3{font-size:1.05rem;margin:0 0 3px;}
 .teacher-thumb{width:52px;height:52px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--gold);background:#eee;}
+.coord-summary{background:#fff;border:1px solid var(--gold);border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:.92rem;line-height:1.6;}
+.coord-summary b{color:#7A5A20;}
 .detail-head-row{display:flex;align-items:center;gap:14px;}
 .detail-head-row>div{flex:1;min-width:0;}
 .teacher-photo-lg{width:84px;height:84px;border-radius:50%;object-fit:cover;flex-shrink:0;border:3px solid var(--gold);}
@@ -595,7 +597,7 @@ function renderLogin(){
     </label>
     ${state.loginError ? `<div class="error-msg">${escapeHtml(state.loginError)}</div>` : ''}
     <button class="btn btn-gold" style="width:100%;padding:13px;" id="loginBtn">Wejdź</button>
-    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + komunikaty zakupy</div>
+    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + koordynatorzy na górze</div>
     </div>
   </div>`;
 }
@@ -674,6 +676,21 @@ function renderCourseDetail(){
       ${course.teacherPhoto ? `<img class="teacher-photo-lg" src="${course.teacherPhoto}" alt="Nauczyciel">` : ''}
     </div>
   </div>`;
+
+  {
+    const vs = course.volunteerSlots;
+    const cc = (vs.coord_course||{people:[]}).people;
+    const mealLines = MEAL_DAYS.map(d=>({d, p:(vs[`coord_meals_${d.key}`]||{people:[]}).people})).filter(x=>x.p.length);
+    if(cc.length || mealLines.length){
+      const allSame = mealLines.length===MEAL_DAYS.length && mealLines.every(x=>x.p.join('|')===mealLines[0].p.join('|'));
+      html += `<div class="coord-summary">
+        ${cc.length ? `<div><b>Koordynator kursu:</b> ${cc.map(escapeHtml).join(', ')}</div>` : ''}
+        ${mealLines.length ? (allSame
+          ? `<div><b>Koordynator posiłków:</b> ${mealLines[0].p.map(escapeHtml).join(', ')}</div>`
+          : mealLines.map(x=>`<div><b>Koordynator posiłków — ${x.d.label}:</b> ${x.p.map(escapeHtml).join(', ')}</div>`).join('')) : ''}
+      </div>`;
+    }
+  }
 
   if(course.aktualnosci){
     html += `<div class="detail-block aktualnosci-block">
@@ -883,8 +900,19 @@ function attachEvents(){
       render();
       showToast(already ? 'Wypisano.' : 'Zapisano — dziękujemy!');
       if(!already){
-        if(key==='room') state.notice = 'Super, skontaktuj się z koordynatorem kursu.';
-        else if(key==='shopping' || key.startsWith('meal_')) state.notice = 'Super, skontaktuj się z koordynatorem posiłków tego dnia.';
+        const isMeal = key.startsWith('meal_');
+        if(key==='room' || key==='shopping' || isMeal){
+          const vsl = course.volunteerSlots;
+          const peopleOf = k => ((vsl[k]||{}).people||[]);
+          let list;
+          if(key==='room') list = peopleOf('coord_course');
+          else if(isMeal) list = peopleOf(`coord_meals_${key.split('_')[1]}`);
+          else list = MEAL_DAYS.flatMap(d=>peopleOf(`coord_meals_${d.key}`));
+          const coords = [...new Set(list)].filter(n=>norm(n)!==norm(state.name));
+          if(coords.length) state.notice = 'Dzięki, skontaktuj się z ' + coords.join(' lub ') + '.';
+          else if(key==='room') state.notice = 'Super, skontaktuj się z koordynatorem kursu.';
+          else state.notice = 'Super, skontaktuj się z koordynatorem posiłków tego dnia.';
+        }
         if(state.notice) render();
       }
     });
