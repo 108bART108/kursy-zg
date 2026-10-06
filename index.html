@@ -586,7 +586,7 @@ function renderLogin(){
     </label>
     ${state.loginError ? `<div class="error-msg">${escapeHtml(state.loginError)}</div>` : ''}
     <button class="btn btn-gold" style="width:100%;padding:13px;" id="loginBtn">Wejdź</button>
-    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + koordynatorzy</div>
+    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + koordynatorzy (osobno)</div>
     </div>
   </div>`;
 }
@@ -682,8 +682,12 @@ function renderCourseDetail(){
   });
   html += `</div>`;
 
+  html += `<div class="detail-block"><h4>Koordynatorzy posiłków</h4>`;
+  html += renderMealTable(course, COORD_ROWS);
+  html += `</div>`;
+
   html += `<div class="detail-block"><h4>Przygotowanie posiłków</h4>`;
-  html += renderMealTable(course);
+  html += renderMealTable(course, MEAL_ROWS);
   html += `</div>`;
 
   if(state.isAdmin){
@@ -721,10 +725,11 @@ function renderVolCategory(key, label, v){
 }
 
 /* ---------- Tabela posiłków (dni x posiłki) ---------- */
-function renderMealTable(course){
+const COORD_ROWS = [{ label:'Koordynator', keyFor: day => `coord_meals_${day.key}`, coord:true }];
+const MEAL_ROWS = MEAL_TYPES.map(meal => ({ label: meal.label, keyFor: day => `meal_${day.key}_${meal.key}` }));
+
+function renderMealTable(course, rows){
   let html = `<table class="meal-table"><thead><tr><th></th>${MEAL_DAYS.map(d=>`<th>${d.label}</th>`).join('')}</tr></thead><tbody>`;
-  const rows = [{ label:'Koordynator', keyFor: day => `coord_meals_${day.key}`, coord:true }]
-    .concat(MEAL_TYPES.map(meal => ({ label: meal.label, keyFor: day => `meal_${day.key}_${meal.key}` })));
   rows.forEach(row=>{
     html += `<tr class="${row.coord ? 'meal-coord-row' : ''}"><th>${row.label}</th>`;
     MEAL_DAYS.forEach(day=>{
