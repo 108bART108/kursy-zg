@@ -472,6 +472,25 @@ async function saveCourses(){
   }catch(e){ showToast('Nie udało się zapisać. Spróbuj ponownie.'); }
 }
 
+/* Odmiana imienia w narzędniku (z kim?) — Bartek → Bartkiem, Ania → Anią */
+function instrWord(w){
+  const lw = w.toLowerCase();
+  const cut = (n, add) => w.slice(0, w.length-n) + add;
+  if(/(ski|cki|dzki)$/.test(lw)) return cut(1,'im');
+  if(/(ska|cka|dzka)$/.test(lw)) return cut(1,'ą');
+  if(/[^aeiouyąęó]eł$/.test(lw)) return cut(2,'łem');
+  if(/[^aeiouyąęó]ek$/.test(lw)) return cut(2,'kiem');
+  if(/[kg]$/.test(lw)) return w + 'iem';
+  if(/a$/.test(lw)) return cut(1,'ą');
+  if(/[iy]$/.test(lw)) return w + 'm';
+  if(/o$/.test(lw)) return w + 'em';
+  if(/e$/.test(lw)) return w;
+  return w + 'em';
+}
+function instrName(full){
+  return String(full).trim().split(/\s+/).map(x=>x.replace(/\d+$/,'')).filter(Boolean).map(instrWord).join(' ');
+}
+
 function showToast(msg){
   state.toastMsg = msg;
   render();
@@ -597,7 +616,7 @@ function renderLogin(){
     </label>
     ${state.loginError ? `<div class="error-msg">${escapeHtml(state.loginError)}</div>` : ''}
     <button class="btn btn-gold" style="width:100%;padding:13px;" id="loginBtn">Wejdź</button>
-    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + koordynatorzy na górze</div>
+    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + odmiana imion</div>
     </div>
   </div>`;
 }
@@ -909,7 +928,7 @@ function attachEvents(){
           else if(isMeal) list = peopleOf(`coord_meals_${key.split('_')[1]}`);
           else list = MEAL_DAYS.flatMap(d=>peopleOf(`coord_meals_${d.key}`));
           const coords = [...new Set(list)].filter(n=>norm(n)!==norm(state.name));
-          if(coords.length) state.notice = 'Dzięki, skontaktuj się z ' + coords.join(' lub ') + '.';
+          if(coords.length) state.notice = 'Dzięki, skontaktuj się z ' + coords.map(instrName).join(' lub ') + '.';
           else if(key==='room') state.notice = 'Super, skontaktuj się z koordynatorem kursu.';
           else state.notice = 'Super, skontaktuj się z koordynatorem posiłków tego dnia.';
         }
