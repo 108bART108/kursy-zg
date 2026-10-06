@@ -405,7 +405,8 @@ let state = {
   editingCourse: null,
   courses: [],
   loginError: '',
-  toastMsg: ''
+  toastMsg: '',
+  notice: ''
 };
 
 const ORG_CATS = [
@@ -552,6 +553,7 @@ function render(){
     html += `<button class="fab" id="fabAdd" title="Dodaj kurs">+</button>`;
   }
   if(state.modal) html += renderModal();
+  if(state.notice) html += `<div class="modal-overlay" id="noticeOverlay" style="align-items:center;justify-content:center;"><div style="background:#fff;border-radius:16px;padding:24px 22px;max-width:320px;margin:0 20px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.35);"><div style="font-size:2rem;">🙏</div><p style="font-size:1.05rem;line-height:1.45;margin:10px 0 18px;">${escapeHtml(state.notice)}</p><button class="btn btn-gold" style="width:100%;padding:12px;" id="noticeOk">OK</button></div></div>`;
   if(state.toastMsg) html += `<div class="toast">${escapeHtml(state.toastMsg)}</div>`;
 
   app.innerHTML = html;
@@ -593,7 +595,7 @@ function renderLogin(){
     </label>
     ${state.loginError ? `<div class="error-msg">${escapeHtml(state.loginError)}</div>` : ''}
     <button class="btn btn-gold" style="width:100%;padding:13px;" id="loginBtn">Wejdź</button>
-    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + zdjęcie nauczyciela</div>
+    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + liczba osób na posiłki</div>
     </div>
   </div>`;
 }
@@ -806,8 +808,11 @@ function renderModal(){
         </div>
 
         <div class="field">
-          <label>Przygotowanie posiłków</label>
-          <p class="course-meta" style="line-height:1.5;">Automatycznie tworzone są zapisy: po 2 osoby na śniadanie, obiad i kolację oraz 1 koordynator posiłków — na piątek, sobotę i niedzielę. Pojawią się w widoku kursu zaraz po zapisaniu.</p>
+          <label>Przygotowanie posiłków — ile osób na jeden posiłek (1–6)</label>
+          <div class="field-row">
+            ${MEAL_TYPES.map(m=>`<div class="field"><label>${m.label}</label><input type="number" min="1" max="6" id="f_need_meal_${m.key}" value="${(c.volunteerSlots['meal_fri_'+m.key]||{needed:2}).needed}"></div>`).join('')}
+          </div>
+          <p class="course-meta" style="line-height:1.5;">Liczba obowiązuje w piątek, sobotę i niedzielę. Dla każdego dnia jest też 1 koordynator posiłków. Tabele pojawią się w widoku kursu po zapisaniu.</p>
         </div>
 
         <div class="modal-actions">
@@ -877,6 +882,11 @@ function attachEvents(){
       await saveCourses();
       render();
       showToast(already ? 'Wypisano.' : 'Zapisano — dziękujemy!');
+      if(!already){
+        if(key==='room') state.notice = 'Super, skontaktuj się z koordynatorem kursu.';
+        else if(key.startsWith('meal_')) state.notice = 'Super, skontaktuj się z koordynatorem posiłków tego dnia.';
+        if(state.notice) render();
+      }
     });
   });
 
@@ -900,6 +910,8 @@ function attachEvents(){
   const cancelBtn = document.getElementById('modalCancel');
   if(cancelBtn) cancelBtn.addEventListener('click', ()=>{ state.modal=null; render(); });
 
+  const noticeOk = document.getElementById('noticeOk');
+  if(noticeOk) noticeOk.addEventListener('click', ()=>{ state.notice=''; render(); });
   const photoInput = document.getElementById('f_photo');
   if(photoInput) photoInput.addEventListener('change', ()=>{
     const file = photoInput.files && photoInput.files[0];
@@ -957,6 +969,12 @@ function collectCourseFormIntoState(){
   if(coordEl) c.volunteerSlots.coord_course.needed = Math.min(2, Math.max(1, parseInt(coordEl.value,10) || 1));
   const roomEl = document.getElementById('f_need_room');
   if(roomEl) c.volunteerSlots.room.needed = Math.min(2, Math.max(1, parseInt(roomEl.value,10) || 1));
+  MEAL_TYPES.forEach(m=>{
+    const el = document.getElementById('f_need_meal_'+m.key);
+    if(!el) return;
+    const n = Math.min(6, Math.max(1, parseInt(el.value,10) || 2));
+    MEAL_DAYS.forEach(d=>{ const sl = c.volunteerSlots[`meal_${d.key}_${m.key}`]; if(sl) sl.needed = n; });
+  });
   const shopEl = document.getElementById('f_need_shopping');
   if(shopEl) c.volunteerSlots.shopping.needed = Math.min(2, Math.max(1, parseInt(shopEl.value,10) || 1));
 }
