@@ -289,6 +289,7 @@ input,textarea,select{font-family:inherit;}
 .meal-table th:first-child, .meal-table td:first-child{width:74px;}
 .meal-coord-row th, .meal-coord-row td{background:#FBF6EA;}
 .meal-coord-row th{color:#7A5A20;}
+.meal-off{background:#EFEAE2;color:#A89A86;font-size:1.1rem;vertical-align:middle !important;}
 .meal-cell{display:flex;flex-direction:column;align-items:center;gap:4px;min-height:34px;justify-content:center;}
 .meal-cell-count{font-size:0.66rem;color:var(--ink-soft);}
 .meal-cell-names{display:flex;flex-wrap:wrap;gap:3px;justify-content:center;}
@@ -453,6 +454,7 @@ async function loadAll(){
     state.courses.forEach(course => {
       if(course.aktualnosci === undefined) course.aktualnosci = '';
       if(course.teacherPhoto === undefined) course.teacherPhoto = '';
+      if(!Array.isArray(course.mealsOff)) course.mealsOff = [];
       if(course.coordinatorMeals === undefined) course.coordinatorMeals = '';
       course.volunteerSlots = Object.assign(emptyVolunteer(), course.volunteerSlots || {});
       // dawny wpis tekstowy "koordynator kursu" -> zapis w nowym polu zgłoszeń
@@ -548,9 +550,17 @@ function fmtLong(dateStr){
   const dni = ['niedziela','poniedziałek','wtorek','środa','czwartek','piątek','sobota'];
   return `${d.getDate()} ${['stycznia','lutego','marca','kwietnia','maja','czerwca','lipca','sierpnia','września','października','listopada','grudnia'][d.getMonth()]} ${d.getFullYear()}`;
 }
+function isMealOff(course, key){ return (course.mealsOff||[]).includes(key); }
+function isDayOff(course, day){ return MEAL_TYPES.every(m=>isMealOff(course, `meal_${day.key}_${m.key}`)); }
+function slotOff(course, key){
+  if(key.startsWith('meal_')) return isMealOff(course, key);
+  if(key.startsWith('coord_meals_')){ const d = MEAL_DAYS.find(x=>x.key===key.slice(12)); return d ? isDayOff(course, d) : false; }
+  return false;
+}
 function volunteerTotals(course){
   let needed=0, filled=0;
   Object.keys(course.volunteerSlots).forEach(key=>{
+    if(slotOff(course, key)) return;
     const v = course.volunteerSlots[key];
     needed += v.needed;
     filled += Math.min(v.people.length, v.needed);
@@ -616,7 +626,7 @@ function renderLogin(){
     </label>
     ${state.loginError ? `<div class="error-msg">${escapeHtml(state.loginError)}</div>` : ''}
     <button class="btn btn-gold" style="width:100%;padding:13px;" id="loginBtn">Wejdź</button>
-    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + odmiana imion</div>
+    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + usuwanie posiłków</div>
     </div>
   </div>`;
 }
@@ -699,9 +709,10 @@ function renderCourseDetail(){
   {
     const vs = course.volunteerSlots;
     const cc = (vs.coord_course||{people:[]}).people;
-    const mealLines = MEAL_DAYS.map(d=>({d, p:(vs[`coord_meals_${d.key}`]||{people:[]}).people})).filter(x=>x.p.length);
+    const activeDays = MEAL_DAYS.filter(d=>!isDayOff(course,d));
+    const mealLines = activeDays.map(d=>({d, p:(vs[`coord_meals_${d.key}`]||{people:[]}).people})).filter(x=>x.p.length);
     if(cc.length || mealLines.length){
-      const allSame = mealLines.length===MEAL_DAYS.length && mealLines.every(x=>x.p.join('|')===mealLines[0].p.join('|'));
+      const allSame = mealLines.length===activeDays.length && mealLines.every(x=>x.p.join('|')===mealLines[0].p.join('|'));
       html += `<div class="coord-summary">
         ${cc.length ? `<div><b>Koordynator kursu:</b> ${cc.map(escapeHtml).join(', ')}</div>` : ''}
         ${mealLines.length ? (allSame
@@ -785,6 +796,7 @@ function renderMealTable(course, rows){
     html += `<tr class="${row.coord ? 'meal-coord-row' : ''}"><th>${row.label}</th>`;
     MEAL_DAYS.forEach(day=>{
       const key = row.keyFor(day);
+      if(slotOff(course, key)){ html += `<td class="meal-off" title="Tego posiłku nie ma w programie kursu">—</td>`; return; }
       const v = course.volunteerSlots[key];
       const already = v.people.some(p=>norm(p)===norm(state.name));
       const full = v.people.length >= v.needed;
@@ -851,6 +863,14 @@ function renderModal(){
           <p class="course-meta" style="line-height:1.5;">Liczba obowiązuje w piątek, sobotę i niedzielę. Dla każdego dnia jest też 1 koordynator posiłków. Tabele pojawią się w widoku kursu po zapisaniu.</p>
         </div>
 
+        <div class="field">
+          <label>Które posiłki odbywają się na kursie?</label>
+          <p class="course-meta" style="line-height:1.5;margin-bottom:6px;">Odznacz posiłki, których nie będzie, np. śniadanie i obiad w piątek, jeśli kurs zaczyna się od kolacji. Takie pola znikną z tabeli zapisów.</p>
+          <table class="meal-table"><thead><tr><th></th>${MEAL_DAYS.map(d=>`<th>${d.label}</th>`).join('')}</tr></thead><tbody>
+            ${MEAL_TYPES.map(m=>`<tr><th>${m.label}</th>${MEAL_DAYS.map(d=>`<td style="vertical-align:middle;"><input type="checkbox" class="meal-check" id="f_meal_on_${d.key}_${m.key}" ${isMealOff(c,`meal_${d.key}_${m.key}`)?'':'checked'}></td>`).join('')}</tr>`).join('')}
+          </tbody></table>
+        </div>
+
         <div class="modal-actions">
           <button class="btn btn-ghost" id="modalCancel">Anuluj</button>
           <button class="btn btn-primary" id="modalSaveCourse">Zapisz kurs</button>
@@ -880,7 +900,7 @@ function attachEvents(){
 
   const fabAdd = document.getElementById('fabAdd');
   if(fabAdd) fabAdd.addEventListener('click', ()=>{
-    state.editingCourse = { id:uid(), title:'', dateStart:'', dateEnd:'', aktualnosci:'', teacherPhoto:'', program:'', coordinatorMeals:'', volunteerSlots: emptyVolunteer() };
+    state.editingCourse = { id:uid(), title:'', dateStart:'', dateEnd:'', aktualnosci:'', teacherPhoto:'', mealsOff:[], program:'', coordinatorMeals:'', volunteerSlots: emptyVolunteer() };
     state.modal = 'addCourse';
     render();
   });
@@ -1022,6 +1042,13 @@ function collectCourseFormIntoState(){
     const n = Math.min(6, Math.max(1, parseInt(el.value,10) || 2));
     MEAL_DAYS.forEach(d=>{ const sl = c.volunteerSlots[`meal_${d.key}_${m.key}`]; if(sl) sl.needed = n; });
   });
+  if(document.getElementById(`f_meal_on_${MEAL_DAYS[0].key}_${MEAL_TYPES[0].key}`)){
+    c.mealsOff = [];
+    MEAL_DAYS.forEach(d=>MEAL_TYPES.forEach(m=>{
+      const el = document.getElementById(`f_meal_on_${d.key}_${m.key}`);
+      if(el && !el.checked) c.mealsOff.push(`meal_${d.key}_${m.key}`);
+    }));
+  }
   const shopEl = document.getElementById('f_need_shopping');
   if(shopEl) c.volunteerSlots.shopping.needed = Math.min(2, Math.max(1, parseInt(shopEl.value,10) || 1));
 }
