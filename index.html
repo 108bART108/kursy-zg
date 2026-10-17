@@ -289,6 +289,10 @@ input,textarea,select{font-family:inherit;}
 .meal-table th:first-child, .meal-table td:first-child{width:74px;}
 .meal-coord-row th, .meal-coord-row td{background:#FBF6EA;}
 .meal-coord-row th{color:#7A5A20;}
+.karma-card{background:#fff;border-radius:18px;padding:22px 22px 20px;max-width:320px;margin:0 20px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.35);animation:karmaPop .35s ease-out;}
+.karma-title{font-size:1.2rem;font-weight:800;line-height:1.25;margin:6px 0 4px;color:#2B2118;}
+.karma-text{font-size:1.02rem;line-height:1.45;margin:8px 0 0;}
+@keyframes karmaPop{0%{transform:scale(.7);opacity:0}100%{transform:scale(1);opacity:1}}
 .meal-off{background:#EFEAE2;color:#A89A86;font-size:1.1rem;vertical-align:middle !important;}
 .meal-cell{display:flex;flex-direction:column;align-items:center;gap:4px;min-height:34px;justify-content:center;}
 .meal-cell-count{font-size:0.66rem;color:var(--ink-soft);}
@@ -410,6 +414,7 @@ let state = {
   loginError: '',
   toastMsg: '',
   notice: '',
+  karma: false,
   catDialog: false
 };
 
@@ -592,7 +597,7 @@ function render(){
   }
   if(state.modal) html += renderModal();
   if(state.catDialog) html += renderCatDialog();
-  if(state.notice) html += `<div class="modal-overlay" id="noticeOverlay" style="align-items:center;justify-content:center;"><div style="background:#fff;border-radius:16px;padding:24px 22px;max-width:320px;margin:0 20px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.35);"><div style="font-size:2rem;">🙏</div><p style="font-size:1.05rem;line-height:1.45;margin:10px 0 18px;">${escapeHtml(state.notice)}</p><button class="btn btn-gold" style="width:100%;padding:12px;" id="noticeOk">OK</button></div></div>`;
+  if(state.notice || state.karma) html += `<div class="modal-overlay" id="noticeOverlay" style="align-items:center;justify-content:center;"><div class="karma-card">${state.karma ? KARMA_SVG + '<div class="karma-title">Brawo! Zdobywasz karma punkty!</div>' : '<div style="font-size:2rem;">🙏</div>'}${state.notice ? `<p class="karma-text">${escapeHtml(state.notice)}</p>` : ''}<button class="btn btn-gold" style="width:100%;padding:12px;margin-top:14px;" id="noticeOk">OK</button></div></div>`;
   if(state.toastMsg) html += `<div class="toast">${escapeHtml(state.toastMsg)}</div>`;
 
   app.innerHTML = html;
@@ -634,7 +639,7 @@ function renderLogin(){
     </label>
     ${state.loginError ? `<div class="error-msg">${escapeHtml(state.loginError)}</div>` : ''}
     <button class="btn btn-gold" style="width:100%;padding:13px;" id="loginBtn">Wejdź</button>
-    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + własne kategorie</div>
+    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + karma punkty</div>
     </div>
   </div>`;
 }
@@ -830,6 +835,18 @@ function renderMealTable(course, rows){
 /* ============================================================
    MODALS
    ============================================================ */
+const KARMA_SVG = `<svg class="karma-svg" viewBox="0 0 160 100" width="150" height="94" aria-hidden="true">
+  <g fill="none" stroke-width="9" stroke-linecap="round">
+    <path d="M14 86 A66 66 0 0 1 146 86" stroke="#E5484D"/>
+    <path d="M25 86 A55 55 0 0 1 135 86" stroke="#F5A524"/>
+    <path d="M36 86 A44 44 0 0 1 124 86" stroke="#F2D94E"/>
+    <path d="M47 86 A33 33 0 0 1 113 86" stroke="#46A758"/>
+    <path d="M58 86 A22 22 0 0 1 102 86" stroke="#3E63DD"/>
+  </g>
+  <circle cx="80" cy="74" r="17" fill="#46A758" stroke="#fff" stroke-width="3"/>
+  <path d="M80 65v18M71 74h18" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+</svg>`;
+
 function renderCatDialog(){
   return `<div class="modal-overlay" id="catOverlay" style="align-items:center;justify-content:center;z-index:1000;">
     <div style="background:#fff;border-radius:16px;padding:22px 20px;width:calc(100% - 40px);max-width:340px;box-shadow:0 10px 40px rgba(0,0,0,.35);">
@@ -974,8 +991,9 @@ function attachEvents(){
       }
       await saveCourses();
       render();
-      showToast(already ? 'Wypisano.' : 'Zapisano — dziękujemy!');
+      if(already) showToast('Wypisano.');
       if(!already){
+        state.karma = true;
         const isMeal = key.startsWith('meal_');
         if(key==='room' || key==='shopping' || isMeal){
           const vsl = course.volunteerSlots;
@@ -989,7 +1007,7 @@ function attachEvents(){
           else if(key==='room') state.notice = 'Super, skontaktuj się z koordynatorem kursu.';
           else state.notice = 'Super, skontaktuj się z koordynatorem posiłków tego dnia.';
         }
-        if(state.notice) render();
+        render();
       }
     });
   });
@@ -1043,7 +1061,7 @@ function attachEvents(){
     });
   });
   const noticeOk = document.getElementById('noticeOk');
-  if(noticeOk) noticeOk.addEventListener('click', ()=>{ state.notice=''; render(); });
+  if(noticeOk) noticeOk.addEventListener('click', ()=>{ state.notice=''; state.karma=false; render(); });
   const photoInput = document.getElementById('f_photo');
   if(photoInput) photoInput.addEventListener('change', ()=>{
     const file = photoInput.files && photoInput.files[0];
