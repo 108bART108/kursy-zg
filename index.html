@@ -289,6 +289,11 @@ input,textarea,select{font-family:inherit;}
 .meal-table th:first-child, .meal-table td:first-child{width:74px;}
 .meal-coord-row th, .meal-coord-row td{background:#FBF6EA;}
 .meal-coord-row th{color:#7A5A20;}
+.task-edit{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--line);}
+.task-edit input[type=text]{flex:1 1 100%;min-width:0;}
+.task-edit input[type=number]{width:80px;flex:0 0 80px;}
+.task-edit span{flex:1;font-size:.9rem;color:var(--ink-soft);}
+.task-edit .btn{flex:0 0 auto;padding:8px 14px;color:#B23A2E;}
 .karma-card{background:#fff;border-radius:18px;padding:22px 22px 20px;max-width:320px;margin:0 20px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,.35);animation:karmaPop .35s ease-out;}
 .karma-title{font-size:1.2rem;font-weight:800;line-height:1.25;margin:6px 0 4px;color:#2B2118;}
 .karma-text{font-size:1.02rem;line-height:1.45;margin:8px 0 0;}
@@ -427,6 +432,7 @@ const ORG_CATS = [
   { key:'cleanup', label:'Sprzątanie po kursie', needed:2 }
 ];
 const EXTRA_FIXED = ORG_CATS.filter(c=>c.key!=='room' && c.key!=='shopping');
+const ORG_KEYS = ORG_CATS.map(c=>c.key);
 const MEAL_DAYS = [
   { key:'fri', label:'Piątek' },
   { key:'sat', label:'Sobota' },
@@ -467,6 +473,7 @@ async function loadAll(){
       if(course.teacherPhoto === undefined) course.teacherPhoto = '';
       if(!Array.isArray(course.mealsOff)) course.mealsOff = [];
       if(!Array.isArray(course.customCats)) course.customCats = [];
+      if(!Array.isArray(course.tasks)) course.tasks = [...ORG_CATS.map(c=>({key:c.key,label:c.label})), ...course.customCats.filter(x=>course.volunteerSlots[x.key])];
       if(course.coordinatorMeals === undefined) course.coordinatorMeals = '';
       course.volunteerSlots = Object.assign(emptyVolunteer(), course.volunteerSlots || {});
       // dawny wpis tekstowy "koordynator kursu" -> zapis w nowym polu zgłoszeń
@@ -565,6 +572,7 @@ function fmtLong(dateStr){
 function isMealOff(course, key){ return (course.mealsOff||[]).includes(key); }
 function isDayOff(course, day){ return MEAL_TYPES.every(m=>isMealOff(course, `meal_${day.key}_${m.key}`)); }
 function slotOff(course, key){
+  if(ORG_KEYS.includes(key) || key.startsWith('custom_')) return !(course.tasks||[]).some(t=>t.key===key);
   if(key.startsWith('meal_')) return isMealOff(course, key);
   if(key.startsWith('coord_meals_')){ const d = MEAL_DAYS.find(x=>x.key===key.slice(12)); return d ? isDayOff(course, d) : false; }
   return false;
@@ -639,7 +647,7 @@ function renderLogin(){
     </label>
     ${state.loginError ? `<div class="error-msg">${escapeHtml(state.loginError)}</div>` : ''}
     <button class="btn btn-gold" style="width:100%;padding:13px;" id="loginBtn">Wejdź</button>
-    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + karma punkty</div>
+    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + edycja zadań</div>
     </div>
   </div>`;
 }
@@ -752,11 +760,9 @@ function renderCourseDetail(){
   html += `</div>`;
 
   html += `<div class="detail-block"><h4>Zadania organizacyjne</h4>`;
-  ORG_CATS.forEach(cat=>{
-    html += renderVolCategory(cat.key, cat.label, course.volunteerSlots[cat.key]);
-  });
-  (course.customCats||[]).forEach(cat=>{
-    if(course.volunteerSlots[cat.key]) html += renderVolCategory(cat.key, escapeHtml(cat.label), course.volunteerSlots[cat.key]);
+  (course.tasks||[]).forEach(t=>{
+    const sl = course.volunteerSlots[t.key] || (course.volunteerSlots[t.key] = { needed:1, people:[] });
+    html += renderVolCategory(t.key, escapeHtml(t.label), sl);
   });
   html += `</div>`;
 
@@ -850,7 +856,7 @@ const KARMA_SVG = `<svg class="karma-svg" viewBox="0 0 160 100" width="150" heig
 function renderCatDialog(){
   return `<div class="modal-overlay" id="catOverlay" style="align-items:center;justify-content:center;z-index:1000;">
     <div style="background:#fff;border-radius:16px;padding:22px 20px;width:calc(100% - 40px);max-width:340px;box-shadow:0 10px 40px rgba(0,0,0,.35);">
-      <h3 style="margin:0 0 12px;">Nowa kategoria zadania</h3>
+      <h3 style="margin:0 0 12px;">Nowe zadanie</h3>
       <div class="field"><label>Nazwa zadania</label><input id="cat_name" maxlength="60" placeholder="np. Nagłośnienie"></div>
       <div class="field"><label>Ile osób potrzeba (1–10)</label><input id="cat_needed" type="number" min="1" max="10" value="1"></div>
       <div class="modal-actions">
@@ -891,22 +897,10 @@ function renderModal(){
           <div class="field"><label>Koordynator kursu — ile osób (1–2)</label><input type="number" min="1" max="2" id="f_need_coord_course" value="${c.volunteerSlots.coord_course.needed}"></div>
         </div>
 
-        <div class="field-row">
-          <div class="field"><label>Pokój dla nauczyciela — ile osób (1–2)</label><input type="number" min="1" max="2" id="f_need_room" value="${c.volunteerSlots.room.needed}"></div>
-          <div class="field"><label>Zakupy na posiłki — ile osób (1–2)</label><input type="number" min="1" max="2" id="f_need_shopping" value="${c.volunteerSlots.shopping.needed}"></div>
-        </div>
-
         <div class="field">
-          <label>Pozostałe zadania — ile osób (1–6)</label>
-          <div class="field-row" style="flex-wrap:wrap;">
-            ${EXTRA_FIXED.map(cat=>`<div class="field" style="min-width:45%;"><label>${cat.label}</label><input type="number" min="1" max="6" id="f_need_${cat.key}" value="${(c.volunteerSlots[cat.key]||{needed:cat.needed}).needed}"></div>`).join('')}
-          </div>
-        </div>
-
-        <div class="field">
-          <label>Własne kategorie zadań</label>
-          ${(c.customCats||[]).length ? (c.customCats||[]).map(cat=>`<div class="field-row" style="align-items:flex-end;margin-bottom:6px;"><div class="field" style="flex:2;"><label>${escapeHtml(cat.label)} — ile osób (1–10)</label><input type="number" min="1" max="10" id="f_need_${cat.key}" value="${(c.volunteerSlots[cat.key]||{needed:1}).needed}"></div><button type="button" class="btn btn-ghost" style="flex:0 0 auto;margin-bottom:2px;color:#B23A2E;" data-del-cat="${cat.key}">Usuń</button></div>`).join('') : `<p class="course-meta" style="margin:0 0 6px;">Brak. Możesz dodać własne zadanie, np. nagłośnienie albo dekoracje.</p>`}
-          <button type="button" class="btn btn-ghost" id="addCatBtn" style="width:100%;">+ Dodaj kategorię</button>
+          <label>Zadania organizacyjne — nazwa i ile osób (1–10)</label>
+          ${(c.tasks||[]).map(t=>`<div class="task-edit"><input type="text" maxlength="60" id="f_task_label_${t.key}" value="${escapeHtml(t.label)}"><input type="number" min="1" max="10" id="f_need_${t.key}" value="${(c.volunteerSlots[t.key]||{needed:1}).needed}"><span>osób</span><button type="button" class="btn btn-ghost" data-del-cat="${t.key}">Usuń</button></div>`).join('')}
+          <button type="button" class="btn btn-ghost" id="addCatBtn" style="width:100%;margin-top:4px;">+ Dodaj zadanie</button>
         </div>
 
         <div class="field">
@@ -954,7 +948,7 @@ function attachEvents(){
 
   const fabAdd = document.getElementById('fabAdd');
   if(fabAdd) fabAdd.addEventListener('click', ()=>{
-    state.editingCourse = { id:uid(), title:'', dateStart:'', dateEnd:'', aktualnosci:'', teacherPhoto:'', mealsOff:[], customCats:[], program:'', coordinatorMeals:'', volunteerSlots: emptyVolunteer() };
+    state.editingCourse = { id:uid(), title:'', dateStart:'', dateEnd:'', aktualnosci:'', teacherPhoto:'', mealsOff:[], customCats:[], tasks: ORG_CATS.map(c=>({key:c.key,label:c.label})), program:'', coordinatorMeals:'', volunteerSlots: emptyVolunteer() };
     state.modal = 'addCourse';
     render();
   });
@@ -1033,7 +1027,7 @@ function attachEvents(){
   if(cancelBtn) cancelBtn.addEventListener('click', ()=>{ state.modal=null; render(); });
 
   const addCatBtn = document.getElementById('addCatBtn');
-  if(addCatBtn) addCatBtn.addEventListener('click', ()=>{ collectCourseFormIntoState(); state.catDialog = true; render(); setTimeout(()=>{ const e=document.getElementById('cat_name'); if(e) e.focus(); },50); });
+  if(addCatBtn) addCatBtn.addEventListener('click', ()=>{ collectCourseFormIntoState(); state.catDialog = true; render(); setTimeout(()=>{ const e=document.getElementById('cat_name'); if(e && !(document.activeElement && document.activeElement.closest('#catOverlay'))) e.focus(); },50); });
   const catCancel = document.getElementById('catCancel');
   if(catCancel) catCancel.addEventListener('click', ()=>{ state.catDialog = false; render(); });
   const catAdd = document.getElementById('catAdd');
@@ -1043,8 +1037,8 @@ function attachEvents(){
     if(!name){ showToast('Wpisz nazwę zadania.'); return; }
     const c = state.editingCourse;
     const key = 'custom_' + uid();
-    c.customCats = c.customCats || [];
-    c.customCats.push({ key, label: name });
+    c.tasks = c.tasks || [];
+    c.tasks.push({ key, label: name });
     c.volunteerSlots[key] = { needed: n, people: [] };
     state.catDialog = false;
     render();
@@ -1055,7 +1049,7 @@ function attachEvents(){
       const c = state.editingCourse, key = btn.dataset.delCat;
       const slot = c.volunteerSlots[key];
       if(slot && slot.people.length && !confirm('W tej kategorii są już zapisane osoby. Usunąć kategorię razem z zapisami?')) return;
-      c.customCats = (c.customCats||[]).filter(x=>x.key!==key);
+      c.tasks = (c.tasks||[]).filter(x=>x.key!==key);
       delete c.volunteerSlots[key];
       render();
     });
@@ -1117,8 +1111,6 @@ function collectCourseFormIntoState(){
   c.program = document.getElementById('f_program').value;
   const coordEl = document.getElementById('f_need_coord_course');
   if(coordEl) c.volunteerSlots.coord_course.needed = Math.min(2, Math.max(1, parseInt(coordEl.value,10) || 1));
-  const roomEl = document.getElementById('f_need_room');
-  if(roomEl) c.volunteerSlots.room.needed = Math.min(2, Math.max(1, parseInt(roomEl.value,10) || 1));
   MEAL_TYPES.forEach(m=>{
     const el = document.getElementById('f_need_meal_'+m.key);
     if(!el) return;
@@ -1132,16 +1124,12 @@ function collectCourseFormIntoState(){
       if(el && !el.checked) c.mealsOff.push(`meal_${d.key}_${m.key}`);
     }));
   }
-  EXTRA_FIXED.forEach(cat=>{
-    const el = document.getElementById('f_need_'+cat.key);
-    if(el && c.volunteerSlots[cat.key]) c.volunteerSlots[cat.key].needed = Math.min(6, Math.max(1, parseInt(el.value,10) || cat.needed));
+  (c.tasks||[]).forEach(t=>{
+    const lb = document.getElementById('f_task_label_'+t.key);
+    if(lb && lb.value.trim()) t.label = lb.value.trim();
+    const el = document.getElementById('f_need_'+t.key);
+    if(el && c.volunteerSlots[t.key]) c.volunteerSlots[t.key].needed = Math.min(10, Math.max(1, parseInt(el.value,10) || 1));
   });
-  (c.customCats||[]).forEach(cat=>{
-    const el = document.getElementById('f_need_'+cat.key);
-    if(el && c.volunteerSlots[cat.key]) c.volunteerSlots[cat.key].needed = Math.min(10, Math.max(1, parseInt(el.value,10) || 1));
-  });
-  const shopEl = document.getElementById('f_need_shopping');
-  if(shopEl) c.volunteerSlots.shopping.needed = Math.min(2, Math.max(1, parseInt(shopEl.value,10) || 1));
 }
 
 render();
