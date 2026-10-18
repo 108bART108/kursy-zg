@@ -798,11 +798,21 @@ function openCoursePdf(course){
   const days = MEAL_DAYS.filter(d=>!isDayOff(course,d));
   const dia = "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><g fill="none" stroke="#a8323a" stroke-width="0.9" opacity="0.09"><path d="M32 6l13 14-13 22L19 20z"/><path d="M19 20h26M25 13l7 29M39 13l-7 29"/></g><g fill="none" stroke="#a8323a" stroke-width="0.6" opacity="0.06"><path d="M0 52l6-6 6 6-6 6zM58 52l6-6 6 6-6 6z"/></g></svg>');
 
-  let rows = `<tr><th>Koordynator kursu</th><td>${list(ppl('coord_course'))}</td></tr>`;
-  days.forEach(d=>{ rows += `<tr><th>Koordynator posiłków — ${d.label}</th><td>${list(ppl('coord_meals_'+d.key))}</td></tr>`; });
+  const need = k => Math.max(0, ((vs[k]||{}).needed||0));
+  const missing = k => Math.max(0, need(k) - ppl(k).length);
+  const badge = k => { if(!need(k)) return ''; const m = missing(k); return m ? `<span class="need">🌈➕ brakuje ${m} os. — karma punkty czekają!</span>` : `<span class="full">✓ komplet</span>`; };
+  const gaps = [];
+  const addGap = (label,k) => { const m=missing(k); if(m) gaps.push(`${label} (${m})`); };
+  addGap('Koordynator kursu','coord_course');
+  days.forEach(d=>addGap('Koordynator posiłków — '+d.label,'coord_meals_'+d.key));
+  (course.tasks||[]).forEach(t=>addGap(t.label,t.key));
+  let mealGap=0; days.forEach(d=>MEAL_TYPES.forEach(m=>{ mealGap+=missing(`meal_${d.key}_${m.key}`); }));
+  if(mealGap) gaps.push(`przygotowanie posiłków (brakuje łącznie ${mealGap} — zobacz tabelę)`);
+  let rows = `<tr><th>Koordynator kursu</th><td>${list(ppl('coord_course'))}${badge('coord_course')}</td></tr>`;
+  days.forEach(d=>{ rows += `<tr><th>Koordynator posiłków — ${d.label}</th><td>${list(ppl('coord_meals_'+d.key))}${badge('coord_meals_'+d.key)}</td></tr>`; });
   (course.tasks||[]).forEach(t=>{
     const sl = vs[t.key] || {needed:1,people:[]};
-    rows += `<tr><th>${E(t.label)}<small>potrzeba: ${sl.needed}</small></th><td>${list(sl.people||[])}</td></tr>`;
+    rows += `<tr><th>${E(t.label)}<small>potrzeba: ${sl.needed}</small></th><td>${list(sl.people||[])}${badge(t.key)}</td></tr>`;
   });
   let meals = `<tr><th></th>${days.map(d=>`<th>${d.label}</th>`).join('')}</tr>`;
   MEAL_TYPES.forEach(m=>{
@@ -811,7 +821,7 @@ function openCoursePdf(course){
       const k=`meal_${d.key}_${m.key}`;
       if(isMealOff(course,k)) return '<td class="off">—</td>';
       const sl = vs[k]||{needed:0,people:[]};
-      return `<td>${list(sl.people||[])}<small>${(sl.people||[]).length}/${sl.needed}</small></td>`;
+      const mm=missing(k); return `<td>${list(sl.people||[])}<small>${(sl.people||[]).length}/${sl.needed}</small>${sl.needed? (mm?'<span class="need">brakuje '+mm+' 🌈➕</span>':'<span class="full">✓ komplet</span>') : ''}</td>`;
     }).join('')}</tr>`;
   });
 
@@ -834,14 +844,20 @@ h1{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:30pt;line-heig
 .prog{font-size:16pt;line-height:1.6;white-space:pre-wrap;background:rgba(255,253,248,.82);padding:2mm 0}
 .news{margin-top:8mm;border-left:1.2mm solid #a8323a;padding:3mm 5mm;background:rgba(168,50,58,.07);font-size:12pt}
 .foot{position:absolute;left:16mm;right:16mm;bottom:9mm;text-align:center;font-size:8.5pt;color:#8a766d}
-h2{font-family:'Fraunces',Georgia,serif;font-size:17pt;color:#7d1f27;margin:6mm 0 3mm}
+h2{font-family:'Fraunces',Georgia,serif;font-size:15pt;color:#7d1f27;margin:4mm 0 2mm}
 table{width:100%;border-collapse:collapse;background:rgba(255,253,248,.9);font-size:10pt}
-th,td{border:0.3mm solid #cdb9ad;padding:2.2mm 3mm;text-align:left;vertical-align:top}
+th,td{border:0.3mm solid #cdb9ad;padding:1.3mm 3mm;text-align:left;vertical-align:top}
 th{background:#f4e6dc;font-weight:600;width:42%}
 table.m th{width:auto;text-align:center}
 table.m th:first-child{width:22%;text-align:left}
 td small,th small{display:block;color:#8a766d;font-weight:400;font-size:8pt;margin-top:0.5mm}
 .empty,.off{color:#b3a198}
+.need{display:block;margin-top:1mm;font-size:8.5pt;font-weight:600;color:#a8323a}
+.full{display:block;margin-top:1mm;font-size:8.5pt;font-weight:600;color:#2f7d4f}
+.banner{margin-top:5mm;padding:3mm 4mm;border-radius:2mm;font-size:9.5pt;line-height:1.4}
+.banner.ok{background:#e4f3ea;border:0.4mm solid #2f7d4f;color:#1f5a38}
+.banner.gap{background:#fbeceb;border:0.4mm solid #a8323a;color:#7d1f27}
+.banner ul{margin:1.5mm 0 0;padding-left:5mm}
 .bar{position:fixed;top:0;left:0;right:0;background:#2a1f1c;color:#fff;padding:8px 12px;font:14px Inter,Arial;display:flex;gap:10px;align-items:center;justify-content:center;z-index:9}
 .bar button{background:#a8323a;color:#fff;border:0;border-radius:6px;padding:8px 14px;font-size:14px}
 body{padding-top:44px}
@@ -861,6 +877,7 @@ body{padding-top:44px}
   <h1 style="font-size:20pt">${E(course.title)}</h1><div class="dates" style="margin-bottom:2mm">${dates}</div>
   <h2>Koordynatorzy i zadania</h2><table>${rows}</table>
   ${days.length ? `<h2>Przygotowanie posiłków</h2><table class="m">${meals}</table>` : ''}
+  ${gaps.length ? `<div class="banner gap"><b>🌈➕ Karma punkty czekają!</b> Jeszcze potrzebujemy osób do: ${gaps.map(E).join(' · ')}. Zapisz się w aplikacji KURSY ZG — każda pomoc się liczy 🙏</div>` : `<div class="banner ok"><b>✓ Mamy komplet!</b> Wszystkie zadania są obsadzone — dziękujemy, karma punkty rozdane 🌈➕</div>`}
   <div class="foot">Stan na ${new Date().toLocaleDateString('pl-PL')} · Dziękujemy za Wasze zaangażowanie 🙏</div>
 </div>
 </body></html>`;
