@@ -877,7 +877,6 @@ body{padding-top:44px}
   <h1 style="font-size:20pt">${E(course.title)}</h1><div class="dates" style="margin-bottom:2mm">${dates}</div>
   <h2>Koordynatorzy i zadania</h2><table>${rows}</table>
   ${days.length ? `<h2>Przygotowanie posiłków</h2><table class="m">${meals}</table>` : ''}
-  ${gaps.length ? `<div class="banner gap"><b>🌈➕ Karma punkty czekają!</b> Jeszcze potrzebujemy osób do: ${gaps.map(E).join(' · ')}. Zapisz się w aplikacji KURSY ZG — każda pomoc się liczy 🙏</div>` : `<div class="banner ok"><b>✓ Mamy komplet!</b> Wszystkie zadania są obsadzone — dziękujemy, karma punkty rozdane 🌈➕</div>`}
   <div class="foot">Stan na ${new Date().toLocaleDateString('pl-PL')} · Dziękujemy za Wasze zaangażowanie 🙏</div>
 </div>
 </body></html>`;
