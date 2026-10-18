@@ -647,7 +647,7 @@ function renderLogin(){
     </label>
     ${state.loginError ? `<div class="error-msg">${escapeHtml(state.loginError)}</div>` : ''}
     <button class="btn btn-gold" style="width:100%;padding:13px;" id="loginBtn">Wejdź</button>
-    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + edycja zadań</div>
+    <div style="margin-top:18px;font-size:0.7rem;color:rgba(243,233,216,0.35);">wersja 108-admin + PDF</div>
     </div>
   </div>`;
 }
@@ -776,11 +776,96 @@ function renderCourseDetail(){
 
   if(state.isAdmin){
     html += `<div style="display:flex;gap:10px;margin-top:6px;">
+      <button class="btn btn-ghost btn-sm" id="pdfCourseBtn">📄 Generuj PDF</button>
       <button class="btn btn-ghost btn-sm" id="editCourseBtn">Edytuj kurs</button>
       <button class="btn btn-danger btn-sm" id="deleteCourseBtn">Usuń kurs</button>
     </div>`;
   }
   return html;
+}
+
+
+/* ---------- PDF (A4): strona 1 program, strona 2 rozpiska ---------- */
+function openCoursePdf(course){
+  const w = window.open('', '_blank');
+  if(!w){ alert('Przeglądarka zablokowała nowe okno. Zezwól na wyskakujące okna dla tej strony i spróbuj ponownie.'); return; }
+  const E = escapeHtml;
+  const vs = course.volunteerSlots || {};
+  const ppl = k => ((vs[k]||{}).people||[]);
+  const list = a => a.length ? a.map(E).join(', ') : '<span class="empty">—</span>';
+  const logo = new URL('logo.png', location.href).href;
+  const dates = fmtLong(course.dateStart) + (course.dateEnd && course.dateEnd!==course.dateStart ? ' – ' + fmtLong(course.dateEnd) : '');
+  const days = MEAL_DAYS.filter(d=>!isDayOff(course,d));
+  const dia = "data:image/svg+xml;utf8," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><g fill="none" stroke="#a8323a" stroke-width="0.9" opacity="0.09"><path d="M32 6l13 14-13 22L19 20z"/><path d="M19 20h26M25 13l7 29M39 13l-7 29"/></g><g fill="none" stroke="#a8323a" stroke-width="0.6" opacity="0.06"><path d="M0 52l6-6 6 6-6 6zM58 52l6-6 6 6-6 6z"/></g></svg>');
+
+  let rows = `<tr><th>Koordynator kursu</th><td>${list(ppl('coord_course'))}</td></tr>`;
+  days.forEach(d=>{ rows += `<tr><th>Koordynator posiłków — ${d.label}</th><td>${list(ppl('coord_meals_'+d.key))}</td></tr>`; });
+  (course.tasks||[]).forEach(t=>{
+    const sl = vs[t.key] || {needed:1,people:[]};
+    rows += `<tr><th>${E(t.label)}<small>potrzeba: ${sl.needed}</small></th><td>${list(sl.people||[])}</td></tr>`;
+  });
+  let meals = `<tr><th></th>${days.map(d=>`<th>${d.label}</th>`).join('')}</tr>`;
+  MEAL_TYPES.forEach(m=>{
+    if(days.every(d=>isMealOff(course,`meal_${d.key}_${m.key}`))) return;
+    meals += `<tr><th>${m.label}</th>${days.map(d=>{
+      const k=`meal_${d.key}_${m.key}`;
+      if(isMealOff(course,k)) return '<td class="off">—</td>';
+      const sl = vs[k]||{needed:0,people:[]};
+      return `<td>${list(sl.people||[])}<small>${(sl.people||[]).length}/${sl.needed}</small></td>`;
+    }).join('')}</tr>`;
+  });
+
+  const html = `<!doctype html><html lang="pl"><head><meta charset="utf-8">
+<title>${E(course.title)} — program</title>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+@page{size:A4;margin:0}
+*{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+html,body{margin:0;background:#888;font-family:'Inter',Arial,sans-serif;color:#2a1f1c}
+.page{width:210mm;height:297mm;margin:0 auto 8mm;background:#fffdf8 url("${dia}");background-size:22mm 22mm;padding:14mm 16mm;position:relative;overflow:hidden;page-break-after:always;break-after:page}
+.page:last-child{page-break-after:auto;break-after:auto;margin-bottom:0}
+.top{display:flex;justify-content:space-between;align-items:center;border-bottom:0.6mm solid #a8323a;padding-bottom:4mm;margin-bottom:8mm}
+.top img.logo{height:15mm}
+h1{font-family:'Fraunces',Georgia,serif;font-weight:600;font-size:30pt;line-height:1.1;margin:0 0 2mm;color:#7d1f27}
+.dates{font-size:13pt;color:#5b4a44;margin-bottom:8mm}
+.head{display:flex;gap:8mm;align-items:center;margin-bottom:8mm}
+.head .t{flex:1}
+.photo{width:42mm;height:42mm;border-radius:50%;object-fit:cover;border:0.8mm solid #a8323a;background:#eee}
+.prog{font-size:16pt;line-height:1.6;white-space:pre-wrap;background:rgba(255,253,248,.82);padding:2mm 0}
+.news{margin-top:8mm;border-left:1.2mm solid #a8323a;padding:3mm 5mm;background:rgba(168,50,58,.07);font-size:12pt}
+.foot{position:absolute;left:16mm;right:16mm;bottom:9mm;text-align:center;font-size:8.5pt;color:#8a766d}
+h2{font-family:'Fraunces',Georgia,serif;font-size:17pt;color:#7d1f27;margin:6mm 0 3mm}
+table{width:100%;border-collapse:collapse;background:rgba(255,253,248,.9);font-size:10pt}
+th,td{border:0.3mm solid #cdb9ad;padding:2.2mm 3mm;text-align:left;vertical-align:top}
+th{background:#f4e6dc;font-weight:600;width:42%}
+table.m th{width:auto;text-align:center}
+table.m th:first-child{width:22%;text-align:left}
+td small,th small{display:block;color:#8a766d;font-weight:400;font-size:8pt;margin-top:0.5mm}
+.empty,.off{color:#b3a198}
+.bar{position:fixed;top:0;left:0;right:0;background:#2a1f1c;color:#fff;padding:8px 12px;font:14px Inter,Arial;display:flex;gap:10px;align-items:center;justify-content:center;z-index:9}
+.bar button{background:#a8323a;color:#fff;border:0;border-radius:6px;padding:8px 14px;font-size:14px}
+body{padding-top:44px}
+@media print{.bar{display:none}body{padding:0;background:none}.page{margin:0}}
+</style></head><body>
+<div class="bar"><span>Podgląd A4 · 2 strony</span><button onclick="window.print()">Drukuj / Zapisz jako PDF</button></div>
+<div class="page">
+  <div class="top"><img class="logo" src="${logo}" alt="Buddyzm Diamentowej Drogi — Linia Karma Kagyu"></div>
+  <div class="head"><div class="t"><h1>${E(course.title)}</h1><div class="dates">${dates}</div></div>
+    ${course.teacherPhoto ? `<img class="photo" src="${course.teacherPhoto}" alt="">` : ''}</div>
+  <h2>Program kursu</h2>
+  <div class="prog">${course.program ? E(course.program) : '<span class="empty">Program zostanie uzupełniony.</span>'}</div>
+  ${course.aktualnosci ? `<div class="news"><b>Aktualności:</b> ${E(course.aktualnosci)}</div>` : ''}
+  <div class="foot">Buddyzm Diamentowej Drogi · Linia Karma Kagyu · Zielona Góra</div>
+</div>
+<div class="page">
+  <div class="top"><img class="logo" src="${logo}" alt=""></div>
+  <h1 style="font-size:20pt">${E(course.title)}</h1><div class="dates" style="margin-bottom:2mm">${dates}</div>
+  <h2>Koordynatorzy i zadania</h2><table>${rows}</table>
+  ${days.length ? `<h2>Przygotowanie posiłków</h2><table class="m">${meals}</table>` : ''}
+  <div class="foot">Stan na ${new Date().toLocaleDateString('pl-PL')} · Dziękujemy za Wasze zaangażowanie 🙏</div>
+</div>
+</body></html>`;
+  w.document.open(); w.document.write(html); w.document.close();
 }
 
 /* ---------- Pojedyncza kategoria dyżuru (checkbox dla zalogowanych) ---------- */
@@ -951,6 +1036,12 @@ function attachEvents(){
     state.editingCourse = { id:uid(), title:'', dateStart:'', dateEnd:'', aktualnosci:'', teacherPhoto:'', mealsOff:[], customCats:[], tasks: ORG_CATS.map(c=>({key:c.key,label:c.label})), program:'', coordinatorMeals:'', volunteerSlots: emptyVolunteer() };
     state.modal = 'addCourse';
     render();
+  });
+
+  const pdfCourseBtn = document.getElementById('pdfCourseBtn');
+  if(pdfCourseBtn) pdfCourseBtn.addEventListener('click', ()=>{
+    const course = state.courses.find(c=>c.id===state.selectedCourseId);
+    if(course) openCoursePdf(course);
   });
 
   const editCourseBtn = document.getElementById('editCourseBtn');
