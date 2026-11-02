@@ -380,8 +380,12 @@ input,textarea,select{font-family:inherit;}
 .med-tab{flex:1;border:1.5px solid var(--line);background:#fff;color:var(--indigo-deep);border-radius:12px;padding:10px 6px;font-weight:700;font-size:.9rem;position:relative}
 .med-tab.on{background:var(--indigo);color:#fff;border-color:var(--indigo)}
 .med-wrap{padding:16px}
+.med-teaser{margin:12px 16px 0;background:linear-gradient(180deg,#fff,#fbf5e8);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px 14px;display:flex;align-items:center;gap:12px}
+.med-teaser .tx{flex:1;font-size:.88rem;line-height:1.35;color:var(--ink-soft)}
+.med-teaser .tx b{display:block;color:var(--indigo-deep);font:600 1rem 'Fraunces',serif}
+.med-teaser button{border:0;border-radius:10px;padding:10px 12px;font-weight:700;font-size:.82rem;background:var(--gold);color:#fff;white-space:nowrap}
 .med-photo{text-align:center;margin-bottom:14px}
-.med-photo img{display:block;margin:0 auto;max-width:100%;max-height:58vh;width:auto;height:auto;border-radius:var(--radius);box-shadow:var(--shadow)}
+.med-photo img{display:block;margin:0 auto;max-width:100%;max-height:27vh;width:auto;height:auto;border-radius:var(--radius);box-shadow:var(--shadow)}
 .med-card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;margin-bottom:14px}
 .med-hero{text-align:center}
 .med-hero img{width:150px;display:block;margin:0 auto 6px}
@@ -648,6 +652,7 @@ function render(){
   if(state.tab === 'med'){
     html += '<div class="med-wrap">' + renderMed() + '</div>';
   } else {
+    if(!state.selectedCourseId) html += renderMedTeaser();
     html += '<div class="content">';
     html += state.selectedCourseId ? renderCourseDetail() : renderCourseList();
     html += '</div>';
@@ -1186,6 +1191,18 @@ async function medReset(){
   catch(e){ showToast('Nie udało się zapisać. Spróbuj ponownie.'); }
 }
 
+function renderMedTeaser(){
+  const u = medMe(), T = medTotals();
+  let tx, btn;
+  if(!u){ tx = `<b>🌈 Wyzwanie 30 dni medytacji</b>Razem zebraliśmy ${T.points.toLocaleString('pl-PL')} karma punktów`; btn = `<button data-medtab="med">Dołącz</button>`; }
+  else {
+    const t = medTodayIdx(u), dc = medDone(u);
+    if(dc >= 30){ tx = `<b>🌈 Wyzwanie ukończone!</b>Razem: ${T.points.toLocaleString('pl-PL')} karma punktów`; btn = `<button data-medtab="med">Zobacz</button>`; }
+    else if(t >= 1 && t <= 30 && !u.done[t]){ tx = `<b>🌈 Dzień ${t} z 30</b>Razem: ${T.points.toLocaleString('pl-PL')} karma punktów`; btn = `<button data-meddo="${t}">Medytowałem/am ✓</button>`; }
+    else { tx = `<b>🌈 Wyzwanie: ${dc}/30 dni</b>Twoje punkty: ${dc*MED_POINTS} · razem: ${T.points.toLocaleString('pl-PL')}`; btn = `<button data-medtab="med">Zobacz</button>`; }
+  }
+  return `<div class="med-teaser"><div class="tx">${tx}</div>${btn}</div>`;
+}
 function renderMedTabs(){
   return `<div class="med-tabs">
     <button class="med-tab ${state.tab!=='med'?'on':''}" data-medtab="kursy">Kursy</button>
